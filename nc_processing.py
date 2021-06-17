@@ -1,6 +1,15 @@
 """
 This file contains useful functions for processing netcdf files.
+
+get_time_slice() - This function returns a time slice from the CMIP6 CEDA archive, first concatenating the files in the selected data folder together.
+get_seasonal_mean_std() - This function returns 2 xarray datasets for the time-mean and standard deviation calculated over the selected years for the selected season.
+get_fixed() - This function returns the fixed area and land fraction variables
+
 """
+
+import numpy as np
+import xarray as xr
+import os
 
 def get_time_slice(dates, model, centre, var, domain, exp, project, run, grid, time_files=0):
     """
@@ -11,10 +20,6 @@ def get_time_slice(dates, model, centre, var, domain, exp, project, run, grid, t
     time_files [integer] = 0, 1, 2... - by default [0] all files will be concatenated before the time-slice is extracted. 
         this may be time-consuming for long experiments. If you know that your time slice spans, e.g. only the last 2 files then enter 2.
     """
-    
-    import numpy as np
-    import xarray as xr
-    import os
     
     """
     Collect the files needed from ceda_dir 
@@ -72,10 +77,6 @@ def get_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, e
     time_files [integer] = 0, 1, 2... - by default [0] all files will be concatenated before the time-slice is extracted. 
         this may be time-consuming for long experiments. If you know that your time slice spans, e.g. only the last 2 files then enter 2.
     """
-    
-    import numpy as np
-    import xarray as xr
-    import os
     
     """
     First define directories and filenames
@@ -145,4 +146,37 @@ def get_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, e
     # return seasonal (or annual) mean and standard deviation
     return ds_seas_mean, ds_seas_std
 
+# end def
+
+def get_fixed(centre, model, run, grid='gn'):
+    """
+    This function returns the fixed area and land fraction variables:
+    areacella - area of gridcells
+    sftlf - fraction of each grid cell that is land
+    
+    You'll need to find which run is the pre-industrial baseline. Search here: https://esgf-index1.ceda.ac.uk/search/cmip6-ceda/
+    search for 'areacella' and the model name.
+    """
+    
+    project='CMIP'
+    exp='piControl'
+    domain='fx'
+    
+    # define the folder and filenames
+    ceda_dir='/badc/cmip6/data/CMIP6/{project}/{centre}/{model}/{exp}/{run}/{domain}/{var}/{grid}/latest/'
+    fname='{var}_{domain}_{model}_{exp}_{run}_{grid}.nc'
+    
+    # Get area
+    var = 'areacella'
+    dir_path = ceda_dir.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    f_path = fname.format(var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    ds_area = xr.open_dataset(dir_path + f_path)
+    
+    # Get land fraction
+    var = 'sftlf'
+    dir_path = ceda_dir.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    f_path = fname.format(var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    ds_land = xr.open_dataset(dir_path + f_path)
+    
+    return ds_area, ds_land
 # end def

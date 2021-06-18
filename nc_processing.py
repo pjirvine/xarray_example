@@ -124,12 +124,12 @@ def get_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, e
         # calculate annual mean and standard deviation
         ds_yearly = ds_tslice.groupby('time.year').mean(dim='time') # take mean over every year
         ds_seas_mean = ds_yearly.mean(dim='year')
-        ds_seas_std = ds_70_100_yearly.std(dim='year')
+        ds_seas_std = ds_yearly.std(dim='year')
 
     elif season in season_list:
         ds_seasonal = list(ds_tslice.groupby('time.season')) # split into seasons
         # take mean over each season to produce a timeseries
-        ds_seasonal_series = [ idx[1].groupby('time.year').mean('time') for idx in ds_70_100_seasons if idx[0] == season ]
+        ds_seasonal_series = [ idx[1].groupby('time.year').mean('time') for idx in ds_seasonal if idx[0] == season ]
         # calculate mean and standard deviation across this seasonal timeseries.
         ds_seas_mean = ds_seasonal_series[0].mean('year')
         ds_seas_std = ds_seasonal_series[0].std('year')

@@ -275,3 +275,96 @@ def get_fixed(centre, model, run, grid='gn'):
     
     return ds_area, ds_land
 # end def
+
+def get_index_series(dates, data_dir, model, centre, var, domain, exp, project, run, grid, index_name, index_kwargs, time_files=0, index_name_file=None, index_args=[], over_write=False):
+    """
+    This function returns the output of the xclim index called on the time-slice of the file(s) specified, i.e. a timeseries of index values
+    It will only work for indices that require a single variable. 
+    
+    USAGE:
+    dates [list] = ['2070-01-01','2100-01-01'] - selects the time-slice to calculate over
+    data_dir = '/home/users/<USERNAME>/data/' - enter your username here!
+    model, centre, var, domain, exp, project, run [string] - specifies which files to 
+    time_files [integer] = 0, 1, 2... - by default [0] all files will be concatenated before the time-slice is extracted. 
+        this may be time-consuming for long experiments. If you know that your time slice spans, e.g. only the last 2 files then enter 2.
+    index_name [string] - the name of the xclim index, e.g. 'growing_degree_days'.
+    index_name_file [string] - the index name for use in the file, defaults to index_name. may need to be changed if underscores or long names problematic.
+    index_args [array] - the arguments to pass to xclim. defaults to an empty list as most (all?) indices use only keyword args
+    index_kwargs [dictionary] - a dictionary containing the list of keyword arguments to pass to the xclim.indices.<index_name> function. e.g.
+        index_kwargs={'tas':None, # where ds_day is a dataset that has been previously loaded.
+            'thresh':'10.0 degC',
+            'freq':'YS',}
+    
+    !!!!! CRITICAL !!!!! - for the keyword argument that specifies the input variable dataarray, 'tas' in this case, enter the value: None (no quotes, 
+        None is a special variable like True and False). This None entry will be replaced with the results of a call to get_time_slice()
+    
+    WARNING - this function will not distinguish between different calls to the same index (different index_kwargs) for a given input file,
+    they will all write to the same file.
+    """
+    
+    """
+    First define directories and filenames
+    """
+    
+    # define the data directory to search for files using lists
+    ceda_dir='/badc/cmip6/data/CMIP6/{project}/{centre}/{model}/{exp}/{run}/{domain}/{var}/{grid}/latest/'.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    # define the base of the filename for the output file(s) using lists, note this matches the file format in the data directory except for the date_4_file section and the missing .nc. 
+    out_base='{var}_{domain}_{model}_{exp}_{run}_{grid}_{time_range}'.format(var='{var}', domain=domain, model=model, exp=exp, run=run, grid=grid, time_range=dates[0]+'_'+dates[1])
+    
+    # use index_name_file if specified, else use index_name for the filename.
+    if index_name_file is None:
+        index_name_file = index_name    
+
+    # define a simplified folder structure for our output data directory.
+    data_dir_full=data_dir + '{model}/{exp}/{var}/'.format(model=model, exp=exp, var=index_name_file)
+    
+    # Format the output filenames
+    fname_out = out_base.format(var=index_name_file) + '.nc'
+    
+    # specify the full output file paths
+    fpath = os.path.join(data_dir_full,fname_out)
+    
+    """
+    Check if processed files already exist, if so return those and end.
+    """
+    if os.path.isfile(fpath) and not over_write: # and not over_write:
+        ds_index = xr.open_dataset(fpath)
+        print("loading existing files", fname_out)
+        return ds_index
+    
+    print("processing files", fname_out)
+    
+    # make directory to store output netcdfs
+    os.makedirs(data_dir_full, exist_ok=True)
+    
+    """
+    Use get_time_slice() to collect the needed data and take the time-slice needed.
+    """
+    args=[dates,model,centre,var,domain,exp,project,run,grid,time_files]
+    ds_tslice = get_time_slice(*args) # *args passes the list of values in as arguments to the get_time_slice function.
+    
+    """
+    Call the xclim index function
+    """
+    
+    # First replace the None item in the index_kwargs with the output of get_time_slice()
+    for key, value in index_kwargs.items():
+        if value is None: # replace None value in dictionary with something:
+            index_kwargs[key] = ds_tslice[var] # xclim.index() is expecting a dataarray so we specify the variable within the dataset
+    
+    # define index_to_call as the function xclim.indices.index_name() with python's getattr() function
+    index_to_call = getattr(xclim.indices, index_name)
+    
+    # calculate the index function, filling in the arguments and keyword arguments defined previously
+    ds_index = index_to_call(*index_args, **index_kwargs)
+    
+    """
+    Finally, save output to netcdf to use again later and also return result
+    """
+    
+    # output datasets to netcdf
+    ds_index.to_netcdf(fpath)
+    # return index timeseries
+    return ds_index
+
+#end def

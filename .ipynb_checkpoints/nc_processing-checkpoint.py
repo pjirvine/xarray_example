@@ -239,8 +239,11 @@ def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domai
     # output datasets to netcdf
     ds_seas_mean.to_netcdf(fpath_mean)
     ds_seas_std.to_netcdf(fpath_std)
+    # Open the files to gather the output, to ensure the function passes the same output regardless of whether file created or read.
+    ds_seas_mean_file = xr.open_dataset(fpath_mean)
+    ds_seas_std_file = xr.open_dataset(fpath_std)
     # return seasonal (or annual) mean and standard deviation
-    return ds_seas_mean, ds_seas_std
+    return ds_seas_mean_file, ds_seas_std_file
 
 # end def
 
@@ -370,3 +373,20 @@ def get_index_series(dates, data_dir, model, centre, var, domain, exp, project, 
     ds_index_file = xr.open_dataset(fpath)
     # return index timeseries
     return ds_index_file
+
+def get_ens_index(dates, data_dir, model, centre, var, domain, exp, project, runs, grid, index_name, index_kwargs, time_files):
+    """
+    This function calculates an ensemble mean for indices
+    """
+    ds_list = [get_index_series(dates, data_dir, model, centre, var, domain, exp, project, RUN, grid, index_name, index_kwargs, time_files=time_files) 
+               for RUN in runs]
+    
+    # Combine the X runs into an ensemble dataset along a new "run" dimension
+    ds_ens = xr.concat(ds_list, 'run')
+
+    # Take the mean over the time (years in this case) and run dimensions
+    ds_ens_mean = ds_ens.mean(dim=['time','run'])
+    ds_ens_std = ds_ens.std(dim=['time','run'])
+    
+    # return mean and std
+    return ds_ens_mean, ds_ens_std

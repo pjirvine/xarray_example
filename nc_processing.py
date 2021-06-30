@@ -10,6 +10,7 @@ get_fixed() - This function returns the fixed area and land fraction variables
 import numpy as np
 import xarray as xr
 import os
+import xclim
 
 def get_time_slice(dates, model, centre, var, domain, exp, project, run, grid, time_files=0):
     """
@@ -305,7 +306,7 @@ def get_index_series(dates, data_dir, model, centre, var, domain, exp, project, 
     """
     First define directories and filenames
     """
-    
+   
     # define the data directory to search for files using lists
     ceda_dir='/badc/cmip6/data/CMIP6/{project}/{centre}/{model}/{exp}/{run}/{domain}/{var}/{grid}/latest/'.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
     # define the base of the filename for the output file(s) using lists, note this matches the file format in the data directory except for the date_4_file section and the missing .nc. 
@@ -327,7 +328,7 @@ def get_index_series(dates, data_dir, model, centre, var, domain, exp, project, 
     """
     Check if processed files already exist, if so return those and end.
     """
-    if os.path.isfile(fpath) and not over_write: # and not over_write:
+    if os.path.isfile(fpath):# and not over_write: # and not over_write:
         ds_index = xr.open_dataset(fpath)
         print("loading existing files", fname_out)
         return ds_index
@@ -342,21 +343,22 @@ def get_index_series(dates, data_dir, model, centre, var, domain, exp, project, 
     """
     args=[dates,model,centre,var,domain,exp,project,run,grid,time_files]
     ds_tslice = get_time_slice(*args) # *args passes the list of values in as arguments to the get_time_slice function.
-    
+
     """
     Call the xclim index function
     """
     
+    func_kwargs = index_kwargs.copy() # copy needed so we don't edit the original!
     # First replace the None item in the index_kwargs with the output of get_time_slice()
-    for key, value in index_kwargs.items():
+    for key, value in func_kwargs.items():
         if value is None: # replace None value in dictionary with something:
-            index_kwargs[key] = ds_tslice[var] # xclim.index() is expecting a dataarray so we specify the variable within the dataset
+            func_kwargs[key] = ds_tslice[var] # xclim.index() is expecting a dataarray so we specify the variable within the dataset
     
     # define index_to_call as the function xclim.indices.index_name() with python's getattr() function
     index_to_call = getattr(xclim.indices, index_name)
     
     # calculate the index function, filling in the arguments and keyword arguments defined previously
-    ds_index = index_to_call(*index_args, **index_kwargs)
+    ds_index = index_to_call(*index_args, **func_kwargs)
     
     """
     Finally, save output to netcdf to use again later and also return result
@@ -364,7 +366,7 @@ def get_index_series(dates, data_dir, model, centre, var, domain, exp, project, 
     
     # output datasets to netcdf
     ds_index.to_netcdf(fpath)
+    # overwrite ds_index with output saved to file so that pre-processed and new are identical
+    ds_index_file = xr.open_dataset(fpath)
     # return index timeseries
-    return ds_index
-
-#end def
+    return ds_index_file

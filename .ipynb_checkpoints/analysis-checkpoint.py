@@ -272,14 +272,14 @@ def sort_data_distribution(data_in, data_sort, values, distribution=False, sort_
 
     Distribution sort: data_sort is binned into percentiles (using a weighting) and this binning is applied
     to data_in.
-    e.g. values = [0.25,0.5,0.25] will return 4 ndarrays with values binned by data_sort into quartiles
+    e.g. values = [0.25,0.5,0.75] will return 4 ndarrays with values binned by data_sort into quartiles
 
     NOTES:
 
     Values must be in ascending order
 
     """
-
+    
     """
     Setup weighting if included:
     """
@@ -289,7 +289,7 @@ def sort_data_distribution(data_in, data_sort, values, distribution=False, sort_
         # Normalize weight
         weight = weight / weight.sum()
     else:
-        weight = np.ones_like(flat_data)
+        weight = np.ones_like(data_sort)
         # Normalize weight
         weight = weight / weight.sum()
 
@@ -299,8 +299,6 @@ def sort_data_distribution(data_in, data_sort, values, distribution=False, sort_
     if distribution:
         quantiles = weighted_quantile(data_sort, values, sample_weight=weight)
         values = quantiles
-
-    print(values)
 
     """
     Value-Sort Mode:

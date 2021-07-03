@@ -149,6 +149,10 @@ def get_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, e
 
 # end def
 
+"""
+Note to self - add print "file missing: ..." and return None for missing file.
+"""
+
 def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, exp, project, runs, grid, time_files=0, over_write=False):
     """
     This function returns 2 xarray datasets for the time-mean and standard deviation calculated over the selected years and runs for the selected season.

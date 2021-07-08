@@ -153,7 +153,7 @@ def get_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, e
 Note to self - add print "file missing: ..." and return None for missing file.
 """
 
-def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, exp, project, runs, grid, time_files=0, over_write=False):
+def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, exp, project, runs, grid, time_files=0, over_write=False, stat='mean'):
     """
     This function returns 2 xarray datasets for the time-mean and standard deviation calculated over the selected years and runs for the selected season.
     it is the same as get_seasonal_mean_std except that a list of runs must be provided rather than a single 
@@ -166,6 +166,8 @@ def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domai
     runs [list of strings] - specifies the runs to combine for the ensemble-mean
     time_files [integer] = 0, 1, 2... - by default [0] all files will be concatenated before the time-slice is extracted. 
         this may be time-consuming for long experiments. If you know that your time slice spans, e.g. only the last 2 files then enter 2.
+    
+    For max / min day in year statistics set stat = 'max' / 'min' in the function call, and ensure that you set domain to 'day'
     """
     
     """
@@ -179,8 +181,18 @@ def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domai
     data_dir_full=data_dir + '{model}/{exp}/{var}/'.format(model=model, exp=exp, var=var)
     
     # Format the output filenames
-    fname_mean = out_base + '_' + season + '_mean.nc'
-    fname_std = out_base + '_' + season + '_std.nc'
+    if stat == 'mean':
+        fname_mean = out_base + '_' + season + '_mean.nc'
+        fname_std = out_base + '_' + season + '_std.nc'
+    elif stat == 'max':
+        fname_mean = out_base + '_' + season + '_max_mean.nc' # add max to name for max
+        fname_std = out_base + '_' + season + '_max_std.nc'
+    elif stat == 'min':
+        fname_mean = out_base + '_' + season + '_min_mean.nc' # add min to name for min
+        fname_std = out_base + '_' + season + '_min_std.nc'
+    else:
+        print('stat must be mean, max or min:', stat)
+        return None
     
     # specify the full output file paths
     fpath_mean = os.path.join(data_dir_full,fname_mean)
@@ -189,13 +201,13 @@ def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domai
     """
     Check if processed files already exist, if so return those and end.
     """
-    if os.path.isfile(fpath_mean) and os.path.isfile(fpath_std) and not over_write: # and not over_write:
+    if os.path.isfile(fpath_mean) and os.path.isfile(fpath_std): # and not over_write:
         ds_mean = xr.open_dataset(fpath_mean)
         ds_std = xr.open_dataset(fpath_std)
-        print("loading existing files", out_base, season)
+        print("loading existing files", out_base, season, stat)
         return ds_mean, ds_std
     
-    print("processing files", out_base, season)
+    print("processing files", out_base, season, stat)
     
     # make directory to store output netcdfs
     os.makedirs(data_dir_full, exist_ok=True)
@@ -221,15 +233,25 @@ def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domai
     """
     season_list = ['DJF','MAM','JJA','SON']
     if season == 'ANN':
+        if stat == 'mean':
+            ds_yearly = ds_ens.groupby('time.year').mean(dim='time') # take mean over every year
+        elif stat == 'max':
+            ds_yearly = ds_ens.groupby('time.year').max(dim='time') # take mean over every year
+        elif stat == 'min':
+            ds_yearly = ds_ens.groupby('time.year').min(dim='time') # take mean over every year
         # calculate annual mean and standard deviation
-        ds_yearly = ds_ens.groupby('time.year').mean(dim='time') # take mean over every year
         ds_seas_mean = ds_yearly.mean(dim=['year','run']) # take mean over years and runs
         ds_seas_std = ds_yearly.std(dim=['year','run'])
 
     elif season in season_list:
         ds_seasonal = list(ds_ens.groupby('time.season')) # split into seasons
         # take mean over each season to produce a timeseries
-        ds_seasonal_series = [ idx[1].groupby('time.year').mean('time') for idx in ds_70_100_seasons if idx[0] == season ]
+        if stat == 'mean':
+            ds_seasonal_series = [ idx[1].groupby('time.year').mean('time') for idx in ds_70_100_seasons if idx[0] == season ]
+        elif stat == 'max':
+            ds_seasonal_series = [ idx[1].groupby('time.year').max('time') for idx in ds_70_100_seasons if idx[0] == season ]
+        elif stat == 'min':
+            ds_seasonal_series = [ idx[1].groupby('time.year').min('time') for idx in ds_70_100_seasons if idx[0] == season ]
         # calculate mean and standard deviation across this seasonal timeseries.
         ds_seas_mean = ds_seasonal_series[0].mean(dim=['year','run']) # take mean over years and runs
         ds_seas_std = ds_seasonal_series[0].std(dim=['year','run'])

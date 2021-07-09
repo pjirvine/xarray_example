@@ -11,6 +11,7 @@ import numpy as np
 import xarray as xr
 import os
 import xclim
+import glob
 
 def get_time_slice(dates, model, centre, var, domain, exp, project, run, grid, time_files=0):
     """
@@ -27,17 +28,22 @@ def get_time_slice(dates, model, centre, var, domain, exp, project, run, grid, t
     """
     # define the data directory to search for files using lists
     ceda_dir='/badc/cmip6/data/CMIP6/{project}/{centre}/{model}/{exp}/{run}/{domain}/{var}/{grid}/latest/'.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    # define the data directory for synda:
+    synda_dir='~/.synda/data/CMIP6/{project}/{centre}/{model}/{exp}/{run}/{domain}/{var}/{grid}/*/'.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    synda_dir = os.path.expanduser(synda_dir) # replace '~' with /home/users/<USERNAME>/
     
-    try:
-        ceda_dir_files = os.listdir(ceda_dir)
-    except FileNotFoundError as error:
-        print(error)
-        return
+    # make a list of the full path to all netcdf files in synda or ceda if synda empty.
+    dir_files = glob.glob(synda_dir + '*.nc')
+    if len(dir_files) == 0: # if synda empty try ceda
+        dir_files = glob.glob(ceda_dir + '*.nc')
+    if len(dir_files) == 0: # if both ceda and synda are empty return None and print error.
+        print("folder not in synda or ceda:",ceda_dir)
+        return None
     
     if time_files == 0: # select all files
-        file_list = ceda_dir_files
+        file_list = dir_files
     elif time_files < len(ceda_dir_files): # select number of time files chosen
-        file_list = ceda_dir_files[len(ceda_dir_files)-time_files:]
+        file_list = ceda_dir_files[len(dir_files)-time_files:]
     else:
         print("ERROR: time_files >= length of file list")
         return
@@ -46,9 +52,9 @@ def get_time_slice(dates, model, centre, var, domain, exp, project, run, grid, t
     Concatenate files, if necessary, then select time
     """
     if len(file_list) == 1: # if there's just 1 file open it.
-        ds = xr.open_dataset(ceda_dir + file_list[0])
+        ds = xr.open_dataset(file_list[0])
     elif len(file_list) > 1: # if there's a list, open all of them and concatenate them together.
-        ds_list = [ xr.open_dataset(ceda_dir + idx) for idx in file_list ]
+        ds_list = [ xr.open_dataset(idx) for idx in file_list ]
         ds = xr.concat(ds_list, 'time')
     else:
         print("ERROR: file_list:", file_list)

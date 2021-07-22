@@ -13,6 +13,64 @@ import os
 import xclim
 import glob
 
+def get_all_time(model, centre, var, domain, exp, project, run, grid):
+    """
+    This function returns all the data from the selected CMIP6 dataset first concatenating the files in the selected data folder together.
+    USAGE:
+    model, centre, var, domain, exp, project, run [string].
+    """
+    
+    """
+    Collect the files needed from ceda_dir 
+    """
+    # define the data directory to search for files using lists
+    ceda_dir='/badc/cmip6/data/CMIP6/{project}/{centre}/{model}/{exp}/{run}/{domain}/{var}/{grid}/latest/'.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    # define the data directory for synda:
+    synda_dir='~/.synda/data/CMIP6/{project}/{centre}/{model}/{exp}/{run}/{domain}/{var}/{grid}/*/'.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+    synda_dir = os.path.expanduser(synda_dir) # replace '~' with /home/users/<USERNAME>/
+    
+    # make a list of the full path to all netcdf files in synda or ceda if synda empty.
+    dir_files = glob.glob(synda_dir + '*.nc')
+    if len(dir_files) == 0: # if synda empty try ceda
+        dir_files = glob.glob(ceda_dir + '*.nc')
+    if len(dir_files) == 0: # if both ceda and synda are empty return None and print error.
+        print("folder not in synda or ceda:",ceda_dir)
+        return None
+    
+    file_list = dir_files
+    
+    """
+    Concatenate files, if necessary, then select time
+    """
+    if len(file_list) == 1: # if there's just 1 file open it.
+        ds = xr.open_dataset(file_list[0])
+    elif len(file_list) > 1: # if there's a list, open all of them and concatenate them together.
+        ds_list = [ xr.open_dataset(idx) for idx in file_list ]
+        ds = xr.concat(ds_list, 'time')
+    else:
+        print("ERROR: file_list:", file_list)
+        return
+    
+    # return ds
+    return ds
+# end def.
+    
+def get_all_time_ens(model, centre, var, domain, exp, project, runs, grid):
+    """
+    This function returns all the data from the selected CMIP6 dataset first concatenating the files in the selected data folder together.
+    USAGE:
+    model, centre, var, domain, exp, project, 
+    runs [list] - to loop over.
+    """
+    
+    # get all runs
+    ds_list = [get_all_time(model, centre, var, domain, exp, project, RUN, grid) for RUN in runs]
+    # concatenate all runs
+    ds_ens = xr.concat(ds_list, "run")
+    # return all runs
+    return ds_ens
+#end def
+    
 def get_time_slice(dates, model, centre, var, domain, exp, project, run, grid, time_files=0):
     """
     This function returns a time slice from the CMIP6 CEDA archive, first concatenating the files in the selected data folder together.

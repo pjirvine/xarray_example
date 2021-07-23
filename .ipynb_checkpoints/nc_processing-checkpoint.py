@@ -187,7 +187,7 @@ def get_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, e
     season_list = ['DJF','MAM','JJA','SON']
     if season == 'ANN':
         # calculate annual mean and standard deviation
-        ds_yearly = ds_tslice.groupby('time.year').mean(dim='time') # take mean over every year
+        ds_yearly = ds_tslice/badc # take mean over every year
         ds_seas_mean = ds_yearly.mean(dim='year')
         ds_seas_std = ds_yearly.std(dim='year')
 
@@ -337,7 +337,7 @@ def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domai
 
 # end def
 
-def get_fixed(centre, model, run, grid='gn'):
+def get_fixed(centre, model, grid='gn', runs_2_check=['r1i1p1f1','r1i1p1f2']):
     """
     This function returns the fixed area and land fraction variables:
     areacella - area of gridcells
@@ -355,19 +355,26 @@ def get_fixed(centre, model, run, grid='gn'):
     ceda_dir='/badc/cmip6/data/CMIP6/{project}/{centre}/{model}/{exp}/{run}/{domain}/{var}/{grid}/latest/'
     fname='{var}_{domain}_{model}_{exp}_{run}_{grid}.nc'
     
-    # Get area
-    var = 'areacella'
-    dir_path = ceda_dir.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
-    f_path = fname.format(var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
-    ds_area = xr.open_dataset(dir_path + f_path)
+    for run in runs_2_check:
     
-    # Get land fraction
-    var = 'sftlf'
-    dir_path = ceda_dir.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
-    f_path = fname.format(var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
-    ds_land = xr.open_dataset(dir_path + f_path)
-    
-    return ds_area, ds_land
+        # Get area
+        var = 'areacella'
+        dir_path = ceda_dir.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+        f_path = fname.format(var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+        
+        # Check if files are there before trying to open them
+        if os.path.isfile(dir_path + f_path):
+        
+            ds_area = xr.open_dataset(dir_path + f_path)
+
+            # Get land fraction
+            var = 'sftlf'
+            dir_path = ceda_dir.format(project=project, centre=centre, var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+            f_path = fname.format(var=var, domain=domain, model=model, exp=exp, run=run, grid=grid)
+            ds_land = xr.open_dataset(dir_path + f_path)
+            
+            return ds_area, ds_land
+        #endif
 # end def
 
 def get_index_series(dates, data_dir, model, centre, var, domain, exp, project, run, grid, index_name, index_kwargs, time_files=0, index_name_file=None, index_args=[], over_write=False):

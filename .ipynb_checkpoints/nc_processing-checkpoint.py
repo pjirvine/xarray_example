@@ -187,7 +187,7 @@ def get_seasonal_mean_std(season, dates, data_dir, model, centre, var, domain, e
     season_list = ['DJF','MAM','JJA','SON']
     if season == 'ANN':
         # calculate annual mean and standard deviation
-        ds_yearly = ds_tslice/badc # take mean over every year
+        ds_yearly = ds_tslice.groupby('time.year').mean(dim='time') # take mean over every year
         ds_seas_mean = ds_yearly.mean(dim='year')
         ds_seas_std = ds_yearly.std(dim='year')
 

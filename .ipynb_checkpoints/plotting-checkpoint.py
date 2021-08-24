@@ -83,7 +83,7 @@ def box_fraction_rack(axis, fraction_rack, label_rack, color_list, y_bounds=[0,1
     # color_list the list of colors for the list of fractions for the box plots.
     # apply_label = True, applies labels on the y-axis.
     
-    num_plots = len(label_stack)
+    num_plots = len(label_rack)
     
     rack_width = 1.0 / num_plots
     

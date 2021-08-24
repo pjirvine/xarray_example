@@ -259,7 +259,7 @@ def fraction_distribution(data, values, cumulative=False, sample_weight=None):
 
     #end fraction_distribution
 
-def sort_data_distribution(data_in, data_sort, values, distribution=False, sort_weight=None, mask=None):
+def sort_data_distribution(data_in, data_sort, values, distribution=False, sort_weight=None, values_sorted=False):
 
     """
     Return = data_out{list of ndarrays}, fractions{list of floats}
@@ -274,11 +274,23 @@ def sort_data_distribution(data_in, data_sort, values, distribution=False, sort_
     to data_in.
     e.g. values = [0.25,0.5,0.75] will return 4 ndarrays with values binned by data_sort into quartiles
 
+    If distribution = True, interpret values as percentiles, otherwise treat as values.
+    
+    If values_sorted = True, assume data already sorted, if False sort data and weighting.
+    This allows point-wise comparisons and the recovery of a fully sorted 1D array.
+
     NOTES:
 
     Values must be in ascending order
 
     """
+    
+    if not values_sorted:
+        sorter = np.argsort(data_sort)
+        data_sort = data_sort[sorter]
+        data_in = data_in[sorter]
+        if sort_weight is not None:
+            sort_weight = sort_weight[sorter]
     
     """
     Setup weighting if included:

@@ -49,6 +49,19 @@ def ttest_func(ds_mean_1, ds_std_1, ds_mean_2, ds_std_2, var, num_years, p_thres
     # Return ttest data array
     return ds_ttest['T-test']
 
+def ttest_thresh(num_years, p_thresh=0.05, sign_figs=3):
+    # returns the number of standard deviations needed to pass a T-test for a given number of years in sample
+    # default, 0.05: 95% T-Test, 3 significant figures.
+    
+    num_steps = 10**sign_figs
+
+    ttest_sds = None
+    for IDX in [idx / num_steps for idx in range(num_steps)]:
+        if ttest_sds is None:
+            if ttest_sub(IDX, 1, num_years, 0, 1, num_years, equal_var=True) < p_thresh:
+                ttest_sds = IDX
+    return ttest_sds
+
 """
 ###
 Define functions which determine better off, worse off, don't know and all sub-types
@@ -160,6 +173,109 @@ def better_worse_off(SRM_mean, SRM_std, CO2_mean, CO2_std, CTRL_mean, CTRL_std, 
     
     return group_dict['better_off'], group_dict['worse_off'], group_dict['dont_know']
 # End def
+
+"""
+This function returns an array where each point is categorized based on whether it is moderated or exacerbated.
+"""
+
+def mod_ex_as_numbers(sg_mean, cc_mean, ctrl_mean, sg_std, cc_std, ctrl_std, years, p_value=0.05, sign=False):
+    """
+    This function reads numpy arrays for geo, co2, and control and calculates which cells are moderated (absolute magnitude of change reduceded)
+    and exacerbated (absolute magnitude of change increased), producing a numpy array with the following values, corresponding to results in the
+    category dictionary:
+    -2: exacerbated, significant, e.g. +5% to +6% (or -6%)
+    -1: exacerbated, insignificant, e.g. +5% to +5.1% (or -5.1%)
+    1: moderated, insignificant, e.g. +5% to +4.9% (or -4.9%)
+    2: moderated, significant, e.g. +5% to 4% (or -4%)
+    [OPTIONAL, only calculated if sign=TRUE, these categories capture the parenthetical results listed above]
+    3: moderated, significant, sign-change, e.g. -4%
+    4: moderated, insignificant, sign-change, e.g. -4.9%
+    5: exacerbated, sign changed, insignificant change, e.g. -5.1%
+    6: exacerbated, sign changed, significant increase in magnitude, -6%
+
+    Inputs:
+    mean and standard deviation as numpy arrays for the solar geo, climate change and control cases.
+    years: number of years for T-Test, e.g., 90 if 3, 30 year runs have been averaged together.
+    p_value = 0.05: default 95% T-Test
+    sign = False: moderated and exacerbated calculated, True: also include over-effective classification.
+
+    Outputs:
+    result: array with same shape as input arrays containing results
+    category_dict: dictionary with values used in results and corresponding categories
+    """
+
+    # calculate anomalies
+    sg_anom = sg_mean - ctrl_mean
+    cc_anom = cc_mean - ctrl_mean
+
+    # caclculate where absolute anomaly increased / decreased
+    mod = 1 * (abs(sg_anom) < abs(cc_anom)) # < produces a true/false result, multiplying by 1 gives 1s and 0s instead
+    ex = 1 * (abs(sg_anom) > abs(cc_anom))
+
+    # calculate where there has been a change in sign:
+    cc_pos = 1 * (cc_anom > 0)
+    sg_pos = 1 * (sg_anom > 0)
+
+    # sign = sign-change
+    # sig = passed significance T-Test.
+
+    sg_sign_same = (cc_pos * sg_pos) + ((1 - cc_pos) * (1 - sg_pos)) # tests whether both pos or both neg. multiplying is same as AND, 1 - X is same as NOT.
+    sg_sign_change = 1 - sg_sign_same 
+
+    # call function which applies mod_ex t-test.
+    mod_sig, ex_sig, dunno = better_worse_off(sg_mean, sg_std, cc_mean, cc_std, ctrl_mean, ctrl_std, years, 0.05)
+
+    # find places moderated / exacerbated but not significant 
+    mod_insig = mod - mod_sig
+    ex_insig = ex - ex_sig
+    
+    category_dict = {-2:'exacerbated, significant',
+                     -1:'exacerbated, insignificant',
+                     1:'moderated, insignificant',
+                     2:'moderated, significant',
+    }
+    
+    # Return standard mod, ex with and without significance test.
+    if not sign:
+        
+        category_dict = {-2:'exacerbated, significant',
+                         -1:'exacerbated, insignificant',
+                         1:'moderated, insignificant',
+                         2:'moderated, significant',
+                        }
+        result = -2*ex_sig + -1*ex_insig + mod_insig + 2*mod_sig
+        
+        return result, category_dict
+
+    if sign: # split all categories into two based on whether there is a change in sign.
+        # exacerbated, significant, sign changed:
+        ex_sig_sign = ex_sig * sg_sign_change
+        ex_sig_nosign = ex_sig - ex_sig_sign
+        # moderated, significant, sign changed:
+        mod_sig_sign = mod_sig * sg_sign_change
+        mod_sig_nosign = mod_sig - mod_sig_sign
+        # exacerbated, insignificant, sign changed:
+        ex_insig_sign = ex_insig * sg_sign_change
+        ex_insig_nosign = ex_insig - ex_insig_sign
+        # moderated, insignificant, sign changed:
+        mod_insig_sign = mod_insig * sg_sign_change
+        mod_insig_nosign = mod_insig - mod_insig_sign
+
+        category_dict = {-2:'exacerbated, significant, no-sign', # 6%
+                         -1:'exacerbated, insignificant, no-sign', # 5.1%
+                         1:'moderated, insignificant, no-sign', # 4.9%
+                         2:'moderated, significant, no-sign', # 4%
+                         3:'moderated, significant, sign', # -4%
+                         4:'moderated, insignificant, sign', # -4.9%
+                         5:'exacerbated, insignificant, sign', # -5.1%
+                         6:'exacerbated, significant, sign', # -6%
+                        }
+        result = (-2 * ex_sig_nosign + -1 * ex_insig_nosign + # exacerbated, same sign
+                       1 * mod_insig_nosign + 2 * mod_sig_nosign + # moderated, without sign change
+                       3 * mod_sig_sign + 4 * mod_insig_nosign + # moderated with sign change
+                       5 * ex_insig_sign + 6 * ex_sig_sign) # sign change, insignificant magnitude change and exacerbated, changed sign.
+
+        return result, category_dict
 
 """
 A set of functions for sorting data and finding the quantiles of distributions.

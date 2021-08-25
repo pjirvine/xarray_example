@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.patches as mpatches
+from nc_processing import *
+from analysis import * 
 
 """
 This package contains:
@@ -93,7 +95,7 @@ def box_fraction_rack(axis, fraction_rack, label_rack, color_list, y_bounds=[0,1
     # color_list the list of colors for the list of fractions for the box plots.
     # apply_label = True, applies labels on the y-axis.
     
-    num_plots = len(label_rack)
+    num_plots = len(fraction_rack)
     
     rack_width = 1.0 / num_plots
     
@@ -146,6 +148,128 @@ def box_fraction_stack_rack(axis, fraction_stacks, label_stack, label_rack, colo
 """
 End frac, stack, racks
 """
+
+"""
+This function plots the fraction in each category for an array as a function of a given distribution of another array sorted 
+from most neg to most pos. Both the fractions and distribution are weighted by the weighting if given.
+    E.g. moderated, exacerbated fractions as a function of the CO2 anomaly.
+"""
+
+def fractions_by_distribution_plot(ax, array_2_plot, array_4_sort, values_4_fracs, colors_4_fracs, weighting=None, num_bins=20, zero_loc=True, pos_neg_thresh=None):
+    """
+    This function plots the fraction in each category for an array as a function of a given distribution of another array sorted 
+    from most neg to most pos. Both the fractions and distribution are weighted by the weighting if given.
+    
+    INPUTS:
+    ax: matplotlib axis where plot will appear
+    array_2_plot: the numpy array of values that will be plotted
+    array_4_sort: the numpy array that will be used to sort array_2_plot.
+    values_4_fracs: the list of values around which the array_2_plot will be binned, 
+                    e.g. for [0, 1] 3 fractions will be calculated: [X < 0, 0 < X < 1, X > 1].
+    colors_4_fracs: the list of colors used for the fractions, must be 1 longer than values_4_fracs.
+    
+    OPTIONS:
+    weighting = None, by default all elements of the array will be weighted equally unless a weighting is provided.
+    num_bins = 20, by default the distribution will be split into ventiles (5%ile increments).
+    zero_loc = True, by default a black vertical line will indicate where the sign of the input.
+    pos_neg_thresh = None, change this to add vertical dashed lines at the pos and neg values in distribution where threhold is exceeded,
+                    e.g. could be used for t-test threshold.
+                    
+    RETURNS:
+    plots the plot on axis ax
+    frac_list_4_plot: a list of the list of fractions used in the plot, starting from 0th percentile and from X < values_4_frac[0].
+    """  
+    
+    # first flatten the arrays:
+    array_2_plot = array_2_plot.flatten()
+    array_4_sort = array_4_sort.flatten()
+    if weighting is not None:
+        weighting = weighting.flatten()
+    
+    # define the bounds and centres by which data will be divided
+    dist_bounds = [(idx+1) / num_bins for idx in range(num_bins -1)]
+    dist_centres = [(idx+0.5) / num_bins for idx in range(num_bins)]
+    
+    print(dist_bounds)
+    
+    # 0-1 in 0.1% used for calculating zero_loc
+    milltile_bounds = [(idx+1) / 1000. for idx in range(999)] # 1 - 999
+    milltile_centres = [(idx+0.5) / 1000. for idx in range(1000)] # 0.5 - 999.5
+    
+    # Sort array_2_plot by array_4_sort
+    plot_sort_data, plot_sort_frac = sort_data_distribution(array_2_plot, array_4_sort, dist_bounds, distribution=True, sort_weight=weighting)
+    # sort array_4_sort by array_4_sort to find zero
+    mltl_sort_sort, mltl_sort_frac = sort_data_distribution(array_4_sort, array_4_sort, milltile_bounds, distribution=True, sort_weight=weighting)
+    
+    # calculate fractions for plot, and apply weighting if needed
+    if weighting is not None: 
+        
+        # sort weighting as above.
+        weight_sort_data, plot_sort_frac = sort_data_distribution(weighting, array_4_sort, dist_bounds, distribution=True, sort_weight=weighting)
+        
+        # Make a list of the fractions in each interval of the plot_sort_data, weighted by weighting
+        frac_list_4_plot = [fraction_distribution(plot_sort_data[IDX], values_4_fracs, sample_weight=weight_sort_data[IDX]) for IDX in range(num_bins)]
+        # This is a list-conprehension, e.g. [FUNC(X) for X in LIST] makes a list of results of FUNC() applied to elements of LIST.
+        # fraction_distribution() calculates the (weighted) fraction of points around the values_4_fracs,
+        # with values_4_fracs of [0, 1], 3 fractions will be calculated: [X < 0, 0 < X < 1, X > 1].
+    else:
+        # list fractions as above but without weighting:
+        frac_list_4_plot = [fraction_distribution(plot_sort_data[IDX], values_4_fracs) for IDX in range(num_bins)]
+
+    """
+    Calculate where zero and thresholds crossed if those options applied.
+    """
+    
+    def find_first_value(sorted_data, value):
+        # Finds the first occurence of a given value for data sorted from low to high
+        sign = np.sign(sorted_data - value)
+        signchange = ((np.roll(sign, 1) - sign) != 0).astype(int)
+        sign_where = np.where(signchange == 1)
+        if sign_where[0].size == 0:
+            return None
+        else:
+            return sign_where[0][1]
+        
+    # Find the medians for the sort data milltiles
+    mltl_sort_medians = np.array([np.median(IDX) for IDX in mltl_sort_sort])
+
+    # set mltls for plotting to None, i.e. to not plot
+    zero_mltl, neg_mltl, pos_mltl = None, None, None
+    
+    # If options on, Find the first milltile where the anomaly exceeds zero plus or minus the t-test threshold.
+    if zero_loc:
+        if find_first_value(mltl_sort_medians, 0) is not None:
+            zero_mltl = milltile_centres[find_first_value(mltl_sort_medians, 0)]
+    if pos_neg_thresh is not None:
+        if find_first_value(mltl_sort_medians, -1.*pos_neg_thresh) is not None:
+            neg_mltl = milltile_centres[find_first_value(mltl_sort_medians, -1.*pos_neg_thresh)]
+        if find_first_value(mltl_sort_medians, pos_neg_thresh) is not None:
+            pos_mltl = milltile_centres[find_first_value(mltl_sort_medians, pos_neg_thresh)]
+          
+    """
+    Plot the data
+    """
+
+    box_fraction_rack(ax, frac_list_4_plot, dist_centres, colors_4_fracs, apply_labels=False)
+
+    ax.set_ylabel('Fraction')
+    ax.set_xticks([0,0.2,0.4,0.6,0.8,1.0])
+    ax.set_xlabel('Sort Percentile')
+    ax.set_xticklabels(['$0^{th}$','$20^{th}$','$40^{th}$','$60^{th}$','$80^{th}$','$100^{th}$'])
+
+    if zero_mltl is not None:
+        plt.plot([zero_mltl,zero_mltl],[0,1],color='k')
+    if neg_mltl is not None:
+        plt.plot([neg_mltl,neg_mltl],[0,1],color='k', linestyle='dashed')
+    if pos_mltl is not None:
+        plt.plot([pos_mltl,pos_mltl],[0,1],color='k', linestyle='dashed')
+    
+    ax.set_ylim(0,1)
+    ax.set_xlim(0,1)   
+    
+    # return fractions used for plot
+    return frac_list_4_plot 
+# end def
 
 """
 Useful color definitions

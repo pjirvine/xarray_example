@@ -100,8 +100,8 @@ def get_time_slice(dates, model, centre, var, domain, exp, project, run, grid, t
     
     if time_files == 0: # select all files
         file_list = dir_files
-    elif time_files < len(ceda_dir_files): # select number of time files chosen
-        file_list = ceda_dir_files[len(dir_files)-time_files:]
+    elif time_files < len(dir_files): # select number of time files chosen
+        file_list = dir_files[len(dir_files)-time_files:]
     else:
         print("ERROR: time_files >= length of file list")
         return
@@ -311,17 +311,27 @@ def get_ens_seasonal_mean_std(season, dates, data_dir, model, centre, var, domai
         ds_seasonal = list(ds_ens.groupby('time.season')) # split into seasons
         # take mean over each season to produce a timeseries
         if stat == 'mean':
-            ds_seasonal_series = [ idx[1].groupby('time.year').mean('time') for idx in ds_70_100_seasons if idx[0] == season ]
+            ds_seasonal_series = [ idx[1].groupby('time.year').mean('time') for idx in ds_seasonal if idx[0] == season ]
         elif stat == 'max':
-            ds_seasonal_series = [ idx[1].groupby('time.year').max('time') for idx in ds_70_100_seasons if idx[0] == season ]
+            ds_seasonal_series = [ idx[1].groupby('time.year').max('time') for idx in ds_seasonal if idx[0] == season ]
         elif stat == 'min':
-            ds_seasonal_series = [ idx[1].groupby('time.year').min('time') for idx in ds_70_100_seasons if idx[0] == season ]
+            ds_seasonal_series = [ idx[1].groupby('time.year').min('time') for idx in ds_seasonal if idx[0] == season ]
         # calculate mean and standard deviation across this seasonal timeseries.
         ds_seas_mean = ds_seasonal_series[0].mean(dim=['year','run']) # take mean over years and runs
         ds_seas_std = ds_seasonal_series[0].std(dim=['year','run'])
-    else:
-        print("only ANN, DJF, MAM, JJA, or SON allowed, you entered:", season)
-        return
+    
+    # For individual months
+#     month_list = ['1','2','3','4','5','6','7','8','9','10','11','12']
+#     elif season in month_list:
+    else: # For individual months
+        ds_monthly = ds_ens.sel(time=ds_ens.time.dt.month.isin([int(season)]))   
+        ds_seas_mean = ds_monthly.mean(dim=['time','run']) # take mean over years and runs
+        ds_seas_std = ds_monthly.std(dim=['time','run'])
+        
+# ISSUE - spurious syntax error on elif statement above causing issues!?
+#     else:
+#         print("only ANN, DJF, MAM, JJA, SON or integer allowed, you entered:", season)
+#         return
     
     """
     Finally, save output to netcdf to use again later and also return result

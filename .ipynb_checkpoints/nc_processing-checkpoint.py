@@ -10,7 +10,6 @@ get_fixed() - This function returns the fixed area and land fraction variables
 import numpy as np
 import xarray as xr
 import os
-import xclim
 import glob
 
 def get_all_time(model, centre, var, domain, exp, project, run, grid):
